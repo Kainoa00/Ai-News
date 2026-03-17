@@ -1,33 +1,67 @@
 import Link from "next/link";
 import { CATEGORIES } from "@/types/article";
 
+function ChronicleIcon() {
+  return (
+    <svg
+      className="size-5 flex-shrink-0"
+      fill="none"
+      viewBox="0 0 48 48"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M36.7273 44C33.9891 44 31.6043 39.8386 30.3636 33.69C29.123 39.8386 26.7382 44 24 44C21.2618 44 18.877 39.8386 17.6364 33.69C16.3957 39.8386 14.0109 44 11.2727 44C7.25611 44 4 35.0457 4 24C4 12.9543 7.25611 4 11.2727 4C14.0109 4 16.3957 8.16144 17.6364 14.31C18.877 8.16144 21.2618 4 24 4C26.7382 4 29.123 8.16144 30.3636 14.31C31.6043 8.16144 33.9891 4 36.7273 4C40.7439 4 44 12.9543 44 24C44 35.0457 40.7439 44 36.7273 44Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 export default function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="border-t border-[#2a2a2a] bg-[#0a0a0a] mt-20">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <footer className="border-t border-slate-800 bg-surface-dark mt-20">
+      <div className="max-w-[1400px] mx-auto px-6 md:px-10 py-12">
+        {/* BYU Mission statement */}
+        <div className="mb-10 pb-8 border-b border-slate-800 text-center">
+          <p className="text-slate-500 text-xs uppercase tracking-widest font-sans mb-2">
+            Founded, supported, and guided by The Church of Jesus Christ of Latter-day Saints
+          </p>
+          <p className="text-slate-400 text-sm italic font-display max-w-2xl mx-auto leading-relaxed">
+            &ldquo;Spiritually strengthening, intellectually enlarging, and character building,
+            leading to lifelong learning and service.&rdquo;
+          </p>
+          <p className="text-slate-600 text-xs font-sans mt-2">— BYU Mission Statement</p>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-10">
+          {/* Brand */}
           <div>
-            <Link href="/" className="flex items-center gap-2 mb-4">
-              <div className="w-7 h-7 rounded-md bg-[#e63946] flex items-center justify-center">
-                <svg viewBox="0 0 24 24" fill="none" className="w-3.5 h-3.5 text-white" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
-              <span className="font-serif text-lg font-bold text-white">AI Pulse</span>
+            <Link href="/" className="flex items-center gap-2.5 text-white mb-4">
+              <ChronicleIcon />
+              <span className="text-base font-bold uppercase tracking-[-0.015em] font-sans">
+                The BYU AI Chronicle
+              </span>
             </Link>
-            <p className="text-[#a0a0a0] text-sm leading-relaxed">
-              Daily AI intelligence for founders, researchers, and investors. Published every morning at 7:00 AM MST.
+            <p className="text-slate-400 text-sm leading-relaxed font-sans">
+              Weekly AI intelligence aligned with BYU&apos;s mission of faith,
+              intellect, character, and service. Published every Wednesday.
             </p>
           </div>
 
+          {/* Sections */}
           <div>
-            <h4 className="text-white font-semibold text-sm mb-4 uppercase tracking-wider">Categories</h4>
-            <ul className="space-y-2">
+            <h4 className="text-white font-bold text-xs uppercase tracking-widest mb-4 font-sans">
+              Sections
+            </h4>
+            <ul className="space-y-2.5">
               {CATEGORIES.map((cat) => (
                 <li key={cat}>
-                  <Link href={`/category/${cat.toLowerCase()}`} className="text-[#a0a0a0] text-sm hover:text-white transition-colors">
+                  <Link
+                    href={`/category/${cat.toLowerCase()}`}
+                    className="text-slate-400 text-sm hover:text-white transition-colors font-sans"
+                  >
                     {cat}
                   </Link>
                 </li>
@@ -35,20 +69,71 @@ export default function Footer() {
             </ul>
           </div>
 
+          {/* Editorial Standards */}
           <div>
-            <h4 className="text-white font-semibold text-sm mb-4 uppercase tracking-wider">Publication Schedule</h4>
-            <div className="space-y-3 text-sm text-[#a0a0a0]">
-              <div className="flex items-start gap-2"><span className="text-[#e63946] mt-0.5">→</span><span>5 articles published daily</span></div>
-              <div className="flex items-start gap-2"><span className="text-[#e63946] mt-0.5">→</span><span>7:00 AM MST every day</span></div>
-              <div className="flex items-start gap-2"><span className="text-[#e63946] mt-0.5">→</span><span>Grounded in real-time news sources</span></div>
-              <div className="flex items-start gap-2"><span className="text-[#e63946] mt-0.5">→</span><span>Analysis powered by Claude</span></div>
+            <h4 className="text-white font-bold text-xs uppercase tracking-widest mb-4 font-sans">
+              Editorial Standards
+            </h4>
+            <div className="space-y-3 text-sm text-slate-400 font-sans">
+              <div className="flex items-start gap-2">
+                <span className="text-byu-tan mt-0.5">→</span>
+                <span>Content aligned with BYU Honor Code values</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-byu-tan mt-0.5">→</span>
+                <span>Factually accurate — no fabricated sources or claims</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-byu-tan mt-0.5">→</span>
+                <span>AI-generated content, clearly disclosed</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-byu-tan mt-0.5">→</span>
+                <span>Sourced live from X.com and the web via Grok</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-byu-tan mt-0.5">→</span>
+                <span>Published every Wednesday at 7:00 AM MST</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="mt-10 pt-8 border-t border-[#1a1a1a] flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-[#666666] text-xs">© {year} AI Pulse. Articles are AI-generated from real news sources.</p>
-          <p className="text-[#666666] text-xs">Built with Next.js · Powered by Anthropic Claude</p>
+        <div className="mt-10 pt-8 border-t border-slate-800 space-y-4">
+          {/* AI disclosure */}
+          <div className="bg-slate-800/40 border border-slate-700 rounded px-4 py-3 text-xs text-slate-400 font-sans leading-relaxed">
+            <span className="font-bold text-slate-300 uppercase tracking-wider">AI Disclosure — </span>
+            Articles in The BYU AI Chronicle are generated by Grok AI using live
+            search of X.com and the web. All content is reviewed against BYU&apos;s
+            Honor Code standards and mission values. Factual claims are sourced
+            from real, verifiable news; sources are cited in each article.
+            This publication is not an official BYU communication.
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex gap-6 text-xs font-sans text-slate-500">
+              <a href="#" className="hover:text-slate-300 transition-colors">
+                Terms of Service
+              </a>
+              <a href="#" className="hover:text-slate-300 transition-colors">
+                Privacy Policy
+              </a>
+              <a href="#" className="hover:text-slate-300 transition-colors">
+                Editorial Guidelines
+              </a>
+              <a
+                href="https://honorcode.byu.edu"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-slate-300 transition-colors"
+              >
+                BYU Honor Code
+              </a>
+            </div>
+            <p className="text-slate-500 text-xs font-sans">
+              © {year} The BYU AI Chronicle. Content aligns with BYU Honor Code values.
+            </p>
+          </div>
         </div>
       </div>
     </footer>

@@ -1,19 +1,38 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Article, ArticleCategory } from "@/types/article";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+function isConfigured() {
+  return (
+    !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+}
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Lazy clients — created only when a function is actually called.
+// Pass cache: "no-store" so Next.js 14 doesn't cache Supabase fetch calls.
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      global: {
+        fetch: (url, options) =>
+          fetch(url, { ...options, cache: "no-store" }),
+      },
+    }
+  );
+}
 
 export const supabaseAdmin = () =>
-  createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { persistSession: false },
-  });
+  createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
 
 export async function getLatestArticles(limit = 10): Promise<Article[]> {
-  const { data, error } = await supabase
+  if (!isConfigured()) return [];
+  const { data, error } = await getSupabase()
     .from("articles")
     .select("*")
     .order("published_at", { ascending: false })
@@ -23,12 +42,13 @@ export async function getLatestArticles(limit = 10): Promise<Article[]> {
 }
 
 export async function getTodaysArticles(): Promise<Article[]> {
+  if (!isConfigured()) return [];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from("articles")
     .select("*")
     .gte("published_at", today.toISOString())
@@ -39,7 +59,8 @@ export async function getTodaysArticles(): Promise<Article[]> {
 }
 
 export async function getArticleBySlug(slug: string): Promise<Article | null> {
-  const { data, error } = await supabase
+  if (!isConfigured()) return null;
+  const { data, error } = await getSupabase()
     .from("articles")
     .select("*")
     .eq("slug", slug)
@@ -52,7 +73,8 @@ export async function getArticlesByCategory(
   category: ArticleCategory,
   limit = 20
 ): Promise<Article[]> {
-  const { data, error } = await supabase
+  if (!isConfigured()) return [];
+  const { data, error } = await getSupabase()
     .from("articles")
     .select("*")
     .eq("category", category)
@@ -63,7 +85,8 @@ export async function getArticlesByCategory(
 }
 
 export async function getAllArticles(limit = 50): Promise<Article[]> {
-  const { data, error } = await supabase
+  if (!isConfigured()) return [];
+  const { data, error } = await getSupabase()
     .from("articles")
     .select("*")
     .order("published_at", { ascending: false })
