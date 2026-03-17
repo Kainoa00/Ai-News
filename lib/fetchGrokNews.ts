@@ -54,15 +54,32 @@ function getDateRange() {
   };
 }
 
-/** Validate that a URL looks like a real image link */
+/** Check URL format looks like a real image */
 function isValidImageUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     if (!["http:", "https:"].includes(parsed.protocol)) return false;
-    // Accept common image extensions or known image CDNs
     const imageExtensions = /\.(jpg|jpeg|png|webp|gif|avif)(\?.*)?$/i;
-    const imageCdns = /\b(images\.|img\.|media\.|cdn\.|static\.|photos\.|pbs\.twimg\.com|upload\.wikimedia\.org)/i;
+    const imageCdns =
+      /\b(images\.|img\.|media\.|cdn\.|static\.|photos\.|pbs\.twimg\.com|upload\.wikimedia\.org)/i;
     return imageExtensions.test(parsed.pathname) || imageCdns.test(url);
+  } catch {
+    return false;
+  }
+}
+
+/** Verify the image URL actually returns HTTP 200 via HEAD request */
+async function verifyImageLive(url: string): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, {
+      method: "HEAD",
+      signal: controller.signal,
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; BYUAIChronicle/1.0)" },
+    });
+    clearTimeout(timeoutId);
+    return res.ok;
   } catch {
     return false;
   }
@@ -70,10 +87,8 @@ function isValidImageUrl(url: string): boolean {
 
 /** Extract the assistant text from the Responses API output array */
 function extractText(data: Record<string, unknown>): string {
-  // Try top-level output_text first (convenience field)
   if (typeof data.output_text === "string") return data.output_text;
 
-  // Walk output array
   const output = data.output as Array<Record<string, unknown>> | undefined;
   if (!Array.isArray(output)) return "";
 
@@ -102,7 +117,9 @@ function extractCitations(data: Record<string, unknown>): string[] {
       const content = item.content as Array<Record<string, unknown>> | undefined;
       if (!Array.isArray(content)) continue;
       for (const block of content) {
-        const annotations = block.annotations as Array<Record<string, unknown>> | undefined;
+        const annotations = block.annotations as
+          | Array<Record<string, unknown>>
+          | undefined;
         if (!Array.isArray(annotations)) continue;
         for (const ann of annotations) {
           if (typeof ann.url === "string") urls.push(ann.url);
@@ -111,6 +128,96 @@ function extractCitations(data: Record<string, unknown>): string[] {
     }
   }
   return urls;
+}
+
+/** Make a single Grok API call with a 4-minute timeout */
+async function callGrok(
+  apiKey: string,
+  body: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4 * 60 * 1000);
+
+  let response: Response;
+  try {
+    response = await fetch(GROK_API_BASE, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if ((err as Error).name === "AbortError") {
+      throw new Error("Grok API timed out after 4 minutes");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Grok API error ${response.status}: ${errorText}`);
+  }
+
+  return (await response.json()) as Record<string, unknown>;
+}
+
+/**
+ * Fallback: ask Grok to find a single image URL for a given headline.
+ * Returns a verified live URL or null.
+ */
+async function findImageWithGrok(
+  apiKey: string,
+  title: string,
+  category: ArticleCategory
+): Promise<string | null> {
+  console.log(`[generate] Searching for image for "${title}"...`);
+  const { from_date, to_date } = getDateRange();
+
+  const body = {
+    model: GROK_MODEL,
+    input: [
+      {
+        role: "user",
+        content: `Search the web and X.com for a high-quality, publicly accessible image related to this news headline: "${title}" (category: ${category}).
+
+Find ONE direct image URL that:
+- Is a real photograph or professional graphic (NOT a research paper figure, chart, or academic diagram)
+- Comes from a news organization, official company press page, government site, or reputable media outlet
+- Ends in .jpg, .jpeg, .png, or .webp
+- Is publicly accessible without authentication
+
+Reply with ONLY the raw image URL and nothing else. If you cannot find a suitable image, reply with the word: null`,
+      },
+    ],
+    tools: [
+      { type: "web_search", enable_image_understanding: true },
+      { type: "x_search", from_date, to_date, enable_image_understanding: true },
+    ],
+    max_output_tokens: 200,
+    temperature: 0.2,
+  };
+
+  try {
+    const data = await callGrok(apiKey, body);
+    const raw = extractText(data).trim();
+    if (!raw || raw.toLowerCase() === "null") return null;
+
+    // Extract just the URL if Grok added surrounding text
+    const urlMatch = raw.match(/https?:\/\/\S+\.(jpg|jpeg|png|webp)/i);
+    const candidate = urlMatch ? urlMatch[0] : raw;
+
+    if (!isValidImageUrl(candidate)) return null;
+    const live = await verifyImageLive(candidate);
+    return live ? candidate : null;
+  } catch (err) {
+    console.warn(`[generate] Image fallback search failed: ${(err as Error).message}`);
+    return null;
+  }
 }
 
 export async function generateWeeklyArticleWithGrok(
@@ -171,16 +278,22 @@ Find the single most significant development from the past 7 days. Then write on
 
 Writing guidance for this category (${category}): ${writingGuidance}
 
+IMAGE REQUIREMENTS — you MUST find a real image:
+- Search for a high-quality photograph or professional graphic from a news article, official company press page, or reputable media site
+- The image must be a real photograph or professional graphic — NOT a research paper figure, academic chart, diagram, or screenshot of text
+- Preferred sources: company newsroom photos, AP/Reuters press photos embedded in articles, official product announcement images
+- The URL must end in .jpg, .jpeg, .png, or .webp and be directly accessible
+
 After completing your research and writing, return ONLY a valid JSON object — no preamble, no markdown code fences — matching this exact schema:
 {
   "title": "A sharp, specific, non-clickbait headline (max 90 characters)",
   "summary": "A 2-sentence executive summary conveying the core insight and why it matters (max 220 characters)",
   "content": "The full article in Markdown. 600-800 words. Use **bold** for key terms on first use. Paragraphs separated by blank lines. No section headers. No byline.",
-  "image_url": "A single direct URL to a relevant, publicly accessible image you found during your search (must end in .jpg, .jpeg, .png, .webp, or be a direct image link from a news source or official organization). Return null if no suitable image was found.",
+  "image_url": "A single direct image URL (.jpg/.jpeg/.png/.webp) from a news source or official organization. Must be a real photo or professional graphic, not a chart or diagram. Return null only if absolutely no image was found.",
   "source_urls": ["url1", "url2", "url3"]
 }`;
 
-  const requestBody = {
+  const data = await callGrok(apiKey, {
     model: GROK_MODEL,
     input: [
       { role: "system", content: systemPrompt },
@@ -188,55 +301,17 @@ After completing your research and writing, return ONLY a valid JSON object — 
     ],
     tools: [
       { type: "web_search", enable_image_understanding: true },
-      {
-        type: "x_search",
-        from_date,
-        to_date,
-        enable_image_understanding: true,
-      },
+      { type: "x_search", from_date, to_date, enable_image_understanding: true },
     ],
     max_output_tokens: 2500,
     temperature: 0.4,
-  };
+  });
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 4 * 60 * 1000); // 4-minute timeout
-
-  let response: Response;
-  try {
-    response = await fetch(GROK_API_BASE, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(requestBody),
-      signal: controller.signal,
-    });
-  } catch (err) {
-    if ((err as Error).name === "AbortError") {
-      throw new Error(`Grok API timed out after 4 minutes for category "${category}"`);
-    }
-    throw err;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `Grok API error ${response.status} for category "${category}": ${errorText}`
-    );
-  }
-
-  const data = (await response.json()) as Record<string, unknown>;
   const rawText = extractText(data);
-
   if (!rawText) {
     throw new Error(`Grok returned empty response for category "${category}"`);
   }
 
-  // Strip markdown code fences if Grok wraps the JSON
   const cleaned = rawText
     .replace(/^```json\s*/i, "")
     .replace(/^```\s*/i, "")
@@ -260,15 +335,31 @@ After completing your research and writing, return ONLY a valid JSON object — 
   ) {
     parsed.source_urls = annotationCitations.slice(0, 5);
   }
+  if (!Array.isArray(parsed.source_urls)) parsed.source_urls = [];
 
-  if (!Array.isArray(parsed.source_urls)) {
-    parsed.source_urls = [];
+  // Validate image URL — format check first, then live HTTP check
+  if (parsed.image_url) {
+    if (!isValidImageUrl(parsed.image_url)) {
+      console.warn(`[generate] "${category}": image URL failed format check, clearing`);
+      parsed.image_url = null;
+    } else {
+      const live = await verifyImageLive(parsed.image_url);
+      if (!live) {
+        console.warn(`[generate] "${category}": image URL returned non-200, clearing`);
+        parsed.image_url = null;
+      }
+    }
   }
 
-  // Validate image_url — must be a real http(s) URL
-  if (parsed.image_url && !isValidImageUrl(parsed.image_url)) {
-    parsed.image_url = null;
+  // Fallback: if still no image, do a dedicated image search
+  if (!parsed.image_url) {
+    console.log(`[generate] "${category}": no valid image from article pass — running fallback image search`);
+    parsed.image_url = await findImageWithGrok(apiKey, parsed.title, category);
   }
+
+  console.log(
+    `[generate] "${category}": image=${parsed.image_url ? "✓" : "✗ none found"}`
+  );
 
   return parsed;
 }
